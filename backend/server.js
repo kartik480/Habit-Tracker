@@ -12,7 +12,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "https://htrackerfinal.vercel.app"],
     methods: ["GET", "POST"]
   }
 });
@@ -40,7 +40,10 @@ const emitToUser = (userId, event, data) => {
 };
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://htrackerfinal.vercel.app'],
+  credentials: true
+}));
 app.use(express.json());
 
 // MongoDB Connection
