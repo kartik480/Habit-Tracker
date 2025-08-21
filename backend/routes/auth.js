@@ -1,53 +1,43 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign(
-    { userId },
-    process.env.JWT_SECRET || 'your-secret-key',
-    { expiresIn: '7d' }
-  );
-};
-
-// @route   POST /api/auth/register
-// @desc    Register a new user
-// @access  Public
+// Register new user
 router.post('/register', [
   body('username')
+    .trim()
     .isLength({ min: 3, max: 30 })
     .withMessage('Username must be between 3 and 30 characters')
     .matches(/^[a-zA-Z0-9_]+$/)
     .withMessage('Username can only contain letters, numbers, and underscores'),
+  
   body('email')
     .isEmail()
-    .withMessage('Please enter a valid email')
-    .normalizeEmail(),
+    .normalizeEmail()
+    .withMessage('Please provide a valid email address'),
+  
   body('password')
     .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long'),
-  body('firstName')
-    .optional()
-    .isLength({ max: 50 })
-    .withMessage('First name cannot exceed 50 characters'),
-  body('lastName')
-    .optional()
-    .isLength({ max: 50 })
-    .withMessage('Last name cannot exceed 50 characters')
+    .withMessage('Password must be at least 6 characters long')
+    .matches(/^(?=.*[a-zA-Z])(?=.*\d)/)
+    .withMessage('Password must contain at least one letter and one number')
 ], async (req, res) => {
   try {
-    // Check for validation errors
+    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
+      });
     }
 
-    const { username, email, password, firstName, lastName } = req.body;
+    const { username, email, password } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -55,203 +45,142 @@ router.post('/register', [
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        message: existingUser.email === email ? 'Email already registered' : 'Username already taken'
-      });
+      if (existingUser.email === email) {
+        return res.status(400).json({
+          message: 'Email already registered'
+        });
+      }
+      if (existingUser.username === username) {
+        return res.status(400).json({
+          message: 'Username already taken'
+        });
+      }
     }
 
     // Create new user
     const user = new User({
       username,
       email,
-      password,
-      firstName,
-      lastName
+      password
     });
 
     await user.save();
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: user.getProfile()
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      }
     });
+
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        message: `${field.charAt(0).toUpperCase() + field.slice(1)} already exists`
+      });
+    }
+    
+    res.status(500).json({
+      message: 'Failed to register user'
+    });
   }
 });
 
-// @route   POST /api/auth/login
-// @desc    Authenticate user & get token
-// @access  Public
+// Login user
 router.post('/login', [
   body('identifier')
     .notEmpty()
-    .withMessage('Username or email is required'),
+    .withMessage('Email or username is required'),
+  
   body('password')
     .notEmpty()
     .withMessage('Password is required')
 ], async (req, res) => {
   try {
-    // Check for validation errors
+    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: errors.array()
+      });
     }
 
     const { identifier, password } = req.body;
 
-    // Find user by username or email
+    // Find user by email or username
     const user = await User.findOne({
       $or: [
-        { username: identifier },
-        { email: identifier.toLowerCase() }
+        { email: identifier.toLowerCase() },
+        { username: identifier }
       ]
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(400).json({
+        message: 'Invalid credentials'
+      });
     }
 
     // Check password
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      return res.status(400).json({
+        message: 'Invalid credentials'
+      });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
 
     res.json({
       message: 'Login successful',
       token,
-      user: user.getProfile()
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      }
     });
+
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({
+      message: 'Failed to login'
+    });
   }
 });
 
-// @route   GET /api/auth/me
-// @desc    Get current user profile
-// @access  Private
-router.get('/me', auth, async (req, res) => {
+// Get user profile (protected route)
+router.get('/me', authenticateToken, async (req, res) => {
   try {
     res.json({
       user: req.user
     });
   } catch (error) {
     console.error('Get profile error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   PUT /api/auth/profile
-// @desc    Update user profile
-// @access  Private
-router.put('/profile', [
-  auth,
-  body('firstName')
-    .optional()
-    .isLength({ max: 50 })
-    .withMessage('First name cannot exceed 50 characters'),
-  body('lastName')
-    .optional()
-    .isLength({ max: 50 })
-    .withMessage('Last name cannot exceed 50 characters'),
-  body('preferences.theme')
-    .optional()
-    .isIn(['light', 'dark'])
-    .withMessage('Theme must be either light or dark'),
-  body('preferences.notifications')
-    .optional()
-    .isBoolean()
-    .withMessage('Notifications must be a boolean value')
-], async (req, res) => {
-  try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const updates = req.body;
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Update allowed fields
-    Object.keys(updates).forEach(key => {
-      if (key === 'preferences') {
-        user.preferences = { ...user.preferences, ...updates.preferences };
-      } else if (['firstName', 'lastName'].includes(key)) {
-        user[key] = updates[key];
-      }
+    res.status(500).json({
+      message: 'Failed to get profile'
     });
-
-    await user.save();
-
-    res.json({
-      message: 'Profile updated successfully',
-      user: user.getProfile()
-    });
-  } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({ message: 'Server error updating profile' });
-  }
-});
-
-// @route   PUT /api/auth/change-password
-// @desc    Change user password
-// @access  Private
-router.put('/change-password', [
-  auth,
-  body('currentPassword')
-    .notEmpty()
-    .withMessage('Current password is required'),
-  body('newPassword')
-    .isLength({ min: 6 })
-    .withMessage('New password must be at least 6 characters long')
-], async (req, res) => {
-  try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Verify current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
-    }
-
-    // Update password
-    user.password = newPassword;
-    await user.save();
-
-    res.json({ message: 'Password changed successfully' });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({ message: 'Server error changing password' });
   }
 });
 

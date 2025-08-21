@@ -1,23 +1,24 @@
 const mongoose = require('mongoose');
 
 const progressSchema = new mongoose.Schema({
+  habitId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Habit',
+    required: [true, 'Habit ID is required']
+  },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
-  },
-  habit: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Habit',
-    required: true
+    required: [true, 'User ID is required']
   },
   date: {
-    type: Date,
-    required: true
+    type: String,
+    required: [true, 'Date is required'],
+    match: [/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format']
   },
   value: {
     type: Number,
-    required: true,
+    default: 0,
     min: [0, 'Value cannot be negative']
   },
   notes: {
@@ -25,95 +26,35 @@ const progressSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
   },
-  // Enhanced completion tracking
-  completion: {
-    isCompleted: {
-      type: Boolean,
-      default: false
-    },
-    completedAt: {
-      type: Date
-    },
-    completedTime: {
-      type: String // Store as HH:MM format
-    },
-    duration: {
-      type: Number, // Duration in minutes
-      min: [0, 'Duration cannot be negative']
-    },
-    startTime: {
-      type: String // Store as HH:MM format
-    },
-    endTime: {
-      type: String // Store as HH:MM format
-    }
+  completed: {
+    type: Boolean,
+    default: false
   },
-  // Mood and difficulty tracking
-  mood: {
-    type: String,
-    enum: ['excellent', 'good', 'okay', 'bad', 'terrible'],
-    default: 'okay'
-  },
-  difficulty: {
-    type: String,
-    enum: ['very-easy', 'easy', 'moderate', 'hard', 'very-hard'],
-    default: 'moderate'
-  },
-  // Location and context
-  location: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'Location cannot exceed 100 characters']
-  },
-  weather: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Weather cannot exceed 50 characters']
-  },
-  // Tags for categorization
-  tags: [{
-    type: String,
-    trim: true,
-    maxlength: [20, 'Tag cannot exceed 20 characters']
-  }]
+  completedAt: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });
 
-// Compound index to ensure one progress entry per habit per day per user
-progressSchema.index({ user: 1, habit: 1, date: 1 }, { unique: true });
+// Compound index to ensure unique progress per habit per date per user
+progressSchema.index({ user: 1, habitId: 1, date: 1 }, { unique: true });
 
-// Index for efficient queries
+// Index for better query performance
 progressSchema.index({ user: 1, date: -1 });
-progressSchema.index({ habit: 1, date: -1 });
-progressSchema.index({ user: 1, 'completion.isCompleted': 1 });
-progressSchema.index({ user: 1, 'completion.completedAt': -1 });
+progressSchema.index({ user: 1, habitId: 1 });
+progressSchema.index({ user: 1, completed: 1 });
 
-// Virtual for formatted date
-progressSchema.virtual('formattedDate').get(function() {
-  return this.date.toISOString().split('T')[0];
-});
-
-// Virtual for completion time
-progressSchema.virtual('completionTimeFormatted').get(function() {
-  if (!this.completion.completedAt) return null;
-  return this.completion.completedAt.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
-});
-
-// Virtual for duration formatted
-progressSchema.virtual('durationFormatted').get(function() {
-  if (!this.completion.duration) return null;
-  const hours = Math.floor(this.completion.duration / 60);
-  const minutes = this.completion.duration % 60;
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+// Pre-save middleware to validate date is not in the future
+progressSchema.pre('save', function(next) {
+  const today = new Date().toISOString().split('T')[0];
+  if (this.date > today) {
+    const error = new Error('Cannot create progress for future dates');
+    error.name = 'ValidationError';
+    return next(error);
   }
-  return `${minutes}m`;
+  next();
 });
 
 // Method to check if progress meets habit target
@@ -121,74 +62,15 @@ progressSchema.methods.meetsTarget = function(habitTarget) {
   return this.value >= habitTarget;
 };
 
-// Method to get progress percentage
-progressSchema.methods.getProgressPercentage = function(habitTarget) {
-  if (habitTarget === 0) return 0;
-  return Math.min((this.value / habitTarget) * 100, 100);
-};
-
-// Method to mark as completed
-progressSchema.methods.markCompleted = function(completionTime = null) {
-  const now = completionTime || new Date();
-  this.completion.isCompleted = true;
-  this.completion.completedAt = now;
-  this.completion.completedTime = now.toTimeString().slice(0, 5);
-  
-  // Calculate duration if start and end times are available
-  if (this.completion.startTime && this.completion.endTime) {
-    const start = new Date(`2000-01-01T${this.completion.startTime}:00`);
-    const end = new Date(`2000-01-01T${this.completion.endTime}:00`);
-    const diffMs = end - start;
-    this.completion.duration = Math.floor(diffMs / (1000 * 60));
+// Method to get progress status
+progressSchema.methods.getStatus = function(habitTarget) {
+  if (this.value >= habitTarget) {
+    return 'completed';
+  } else if (this.value > 0) {
+    return 'partial';
+  } else {
+    return 'not-started';
   }
-  
-  return this;
 };
-
-// Method to get completion status with timing
-progressSchema.methods.getCompletionStatus = function() {
-  if (this.completion.isCompleted) {
-    return {
-      status: 'completed',
-      message: `Completed at ${this.completion.completedTime}`,
-      timeAgo: this.getTimeAgo(this.completion.completedAt),
-      duration: this.durationFormatted
-    };
-  }
-  
-  return {
-    status: 'pending',
-    message: 'Not completed yet',
-    progress: this.value
-  };
-};
-
-// Helper method to get time ago
-progressSchema.methods.getTimeAgo = function(date) {
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-  if (diffHours < 24) return `${diffHours} hours ago`;
-  return `${diffDays} days ago`;
-};
-
-// Pre-save middleware to update completion status
-progressSchema.pre('save', function(next) {
-  if (this.isModified('value')) {
-    // Auto-mark as completed if value meets target (assuming target is 1 for boolean habits)
-    if (this.value > 0) {
-      this.completion.isCompleted = true;
-      if (!this.completion.completedAt) {
-        this.completion.completedAt = new Date();
-        this.completion.completedTime = new Date().toTimeString().slice(0, 5);
-      }
-    }
-  }
-  next();
-});
 
 module.exports = mongoose.model('Progress', progressSchema);

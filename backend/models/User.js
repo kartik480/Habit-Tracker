@@ -14,8 +14,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Email is required'],
     unique: true,
-    lowercase: true,
     trim: true,
+    lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
   password: {
@@ -23,45 +23,10 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters long']
   },
-  firstName: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'First name cannot exceed 50 characters']
-  },
-  lastName: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Last name cannot exceed 50 characters']
-  },
-  avatar: {
-    type: String,
-    default: ''
-  },
-  preferences: {
-    theme: {
-      type: String,
-      enum: ['light', 'dark'],
-      default: 'light'
-    },
-    notifications: {
-      type: Boolean,
-      default: true
-    },
-    reminderTime: {
-      type: String,
-      default: '09:00'
-    }
-  },
   createdAt: {
     type: Date,
     default: Date.now
-  },
-  lastLogin: {
-    type: Date,
-    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
 // Hash password before saving
@@ -82,11 +47,11 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to get user profile without password
-userSchema.methods.getProfile = function() {
-  const userObject = this.toObject();
-  delete userObject.password;
-  return userObject;
+// Method to get user without password
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  return user;
 };
 
 module.exports = mongoose.model('User', userSchema);
