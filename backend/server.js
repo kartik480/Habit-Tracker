@@ -23,7 +23,8 @@ const io = socketIo(server, {
   cors: {
     origin: [
       "http://localhost:3000", 
-      "https://htrackerfinal.vercel.app"
+      "https://htrackerfinal.vercel.app",
+      "https://htrackerfinal-3beeaa1uw-karthikreddys-projects.vercel.app"
     ],
     methods: ["GET", "POST"]
   }
@@ -55,7 +56,8 @@ const emitToUser = (userId, event, data) => {
 app.use(cors({
   origin: [
     'http://localhost:3000', 
-    'https://htrackerfinal.vercel.app'
+    'https://htrackerfinal.vercel.app',
+    'https://htrackerfinal-3beeaa1uw-karthikreddys-projects.vercel.app'
   ],
   credentials: true
 }));
