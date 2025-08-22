@@ -112,6 +112,8 @@ router.post('/', [
     .withMessage('Date must be in YYYY-MM-DD format'),
   
   body('value')
+    .notEmpty()
+    .withMessage('Value is required')
     .isFloat({ min: 0 })
     .withMessage('Value must be a non-negative number'),
   
@@ -122,9 +124,39 @@ router.post('/', [
     .withMessage('Notes cannot exceed 500 characters')
 ], async (req, res) => {
   try {
+    // Debug: Log the entire request body
+    console.log('🔍 Request body received:', req.body);
+    console.log('🔍 Request body keys:', Object.keys(req.body));
+    console.log('🔍 Request body values:', Object.values(req.body));
+    console.log('🔍 Individual field checks:', {
+      hasHabitId: !!req.body.habitId,
+      hasHabit: !!req.body.habit,
+      hasDate: !!req.body.date,
+      hasValue: req.body.value !== undefined && req.body.value !== null,
+      valueType: typeof req.body.value,
+      valueValue: req.body.value
+    });
+    
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
+      
+      // Check if we're missing habitId specifically
+      const missingFields = [];
+      if (!req.body.habitId && !req.body.habit) missingFields.push('habit');
+      if (!req.body.date) missingFields.push('date');
+      if (req.body.value === undefined || req.body.value === null || req.body.value === '') missingFields.push('value');
+      
+      if (missingFields.length > 0) {
+        console.log('❌ Missing fields detected:', missingFields);
+        return res.status(400).json({
+          message: `Missing required fields: ${missingFields.join(', ')} ${missingFields.length === 1 ? 'is' : 'are'} required`,
+          errors: errors.array(),
+          missingFields: missingFields
+        });
+      }
+      
       return res.status(400).json({
         message: 'Validation failed',
         errors: errors.array()
@@ -133,6 +165,12 @@ router.post('/', [
 
     const { habitId, date, value, notes } = req.body;
     console.log('🔍 Creating progress with data:', { habitId, date, value, notes });
+    console.log('🔍 Field types:', {
+      habitId: typeof habitId,
+      date: typeof date,
+      value: typeof value,
+      notes: typeof notes
+    });
     
     // Validate that date is not in the future
     // Use a more lenient approach to handle timezone differences
@@ -306,6 +344,8 @@ router.put('/:id', [
     .withMessage('Date must be in YYYY-MM-DD format'),
   
   body('value')
+    .notEmpty()
+    .withMessage('Value is required')
     .isFloat({ min: 0 })
     .withMessage('Value must be a non-negative number'),
   
