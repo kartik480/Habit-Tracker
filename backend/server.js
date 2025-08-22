@@ -21,11 +21,7 @@ const server = http.createServer(app);
 // WebSocket setup
 const io = socketIo(server, {
   cors: {
-    origin: [
-      "http://localhost:3000", 
-      "https://htrackerfinal.vercel.app",
-      "https://htrackerfinal-3beeaa1uw-karthikreddys-projects.vercel.app"
-    ],
+    origin: true, // Allow all origins for testing
     methods: ["GET", "POST"]
   }
 });
@@ -54,11 +50,7 @@ const emitToUser = (userId, event, data) => {
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'https://htrackerfinal.vercel.app',
-    'https://htrackerfinal-3beeaa1uw-karthikreddys-projects.vercel.app'
-  ],
+  origin: true, // Allow all origins for testing
   credentials: true
 }));
 
@@ -67,10 +59,27 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  console.log('🏥 Health check request from:', req.headers.origin || 'Unknown origin');
   res.json({ 
     message: 'Habit Tracker API is running!', 
     timestamp: new Date(),
-    version: '1.0.0'
+    version: '1.0.0',
+    cors: 'enabled',
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Test endpoint for debugging
+app.get('/api/test', (req, res) => {
+  console.log('🧪 Test endpoint hit from:', req.headers.origin || 'Unknown origin');
+  res.json({ 
+    message: 'Test endpoint working!',
+    headers: {
+      origin: req.headers.origin,
+      userAgent: req.headers['user-agent'],
+      accept: req.headers.accept
+    },
+    timestamp: new Date()
   });
 });
 
