@@ -97,8 +97,8 @@ router.get('/habit/:habitId', async (req, res) => {
   }
 });
 
-// Create or update progress
-router.post('/', [
+// Create or update progress - NEW VERSION
+router.post('/v2', [
   body('habitId')
     .notEmpty()
     .withMessage('Habit ID is required')
@@ -544,6 +544,16 @@ router.get('/force-restart', (req, res) => {
     message: '🚀 FORCE RESTART TRIGGERED',
     timestamp: new Date().toISOString(),
     action: 'restart'
+  });
+});
+
+// NEW ROUTE STRUCTURE - FORCE RAILWAY UPDATE
+router.get('/new-structure-test', (req, res) => {
+  res.json({ 
+    message: '🔄 NEW STRUCTURE DETECTED',
+    timestamp: new Date().toISOString(),
+    version: '3.0.0',
+    status: 'FORCED UPDATE'
   });
 });
 
