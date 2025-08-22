@@ -137,13 +137,13 @@ router.post('/', [
     console.log('🔍 Request body received:', req.body);
     console.log('🔍 Request body keys:', Object.keys(req.body));
     console.log('🔍 Request body values:', Object.values(req.body));
-          console.log('🔍 Individual field checks:', {
-        hasHabitId: !!req.body.habitId,
-        hasDate: !!req.body.date,
-        hasValue: req.body.value !== undefined && req.body.value !== null,
-        valueType: typeof req.body.value,
-        valueValue: req.body.value
-      });
+    console.log('🔍 Individual field checks:', {
+      hasHabitId: !!req.body.habitId,
+      hasDate: !!req.body.date,
+      hasValue: req.body.value !== undefined && req.body.value !== null,
+      valueType: typeof req.body.value,
+      valueValue: req.body.value
+    });
     
 
 
