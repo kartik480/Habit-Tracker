@@ -195,7 +195,6 @@ router.post('/', [
     if (progress) {
       // Update existing progress
       progress.habitId = habitId; // Ensure habitId is set correctly
-      progress.habit = habitId; // Also update the habit field for consistency
       progress.value = Number(value);
       progress.notes = notes || '';
       progress.completed = Number(value) >= habit.targetValue;
@@ -251,18 +250,18 @@ router.post('/', [
     if (error.code === 11000) {
       console.error('❌ Duplicate key error detected:', error.keyValue);
       
-      // Try to find and update existing progress
+      // Try to find and update existing progress for the SAME habit and date
       try {
         const existingProgress = await Progress.findOne({
           user: req.userId,
+          habitId: habitId,
           date: date
         });
         
         if (existingProgress) {
-          console.log('🔄 Found existing progress, updating instead:', existingProgress._id);
+          console.log('🔄 Found existing progress for same habit, updating instead:', existingProgress._id);
           
           // Update existing progress
-          existingProgress.habitId = habitId;
           existingProgress.value = Number(value);
           existingProgress.notes = notes || '';
           existingProgress.completed = Number(value) >= habit.targetValue;
