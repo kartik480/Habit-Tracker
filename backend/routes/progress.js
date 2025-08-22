@@ -98,7 +98,7 @@ router.get('/habit/:habitId', async (req, res) => {
 });
 
 // Create or update progress
-router.post('/create-new', [
+router.post('/', [
   body('habitId')
     .notEmpty()
     .withMessage('Habit ID is required')
@@ -525,6 +525,15 @@ router.get('/stats/overview', async (req, res) => {
       message: 'Failed to fetch progress statistics' 
     });
   }
+});
+
+// Debug endpoint to test if Railway is updating
+router.get('/debug-test', (req, res) => {
+  res.json({ 
+    message: '🔥 BACKEND IS UPDATED - This is the NEW version!',
+    timestamp: new Date().toISOString(),
+    route: '/api/progress/debug-test'
+  });
 });
 
 // Cleanup corrupted progress data
