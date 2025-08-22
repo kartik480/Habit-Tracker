@@ -123,13 +123,16 @@ router.post('/', [
     .isLength({ max: 500 })
     .withMessage('Notes cannot exceed 500 characters')
 ], (req, res, next) => {
+  console.log('🔥 CUSTOM VALIDATION MIDDLEWARE CALLED');
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('🔥 CUSTOM VALIDATION FAILED:', errors.array());
     return res.status(400).json({
-      message: 'Validation failed',
+      message: 'CUSTOM VALIDATION ERROR - BACKEND VALIDATION FAILED',
       errors: errors.array()
     });
   }
+  console.log('🔥 CUSTOM VALIDATION PASSED');
   next();
 }, async (req, res) => {
   try {
