@@ -130,7 +130,6 @@ router.post('/', [
     console.log('🔍 Request body values:', Object.values(req.body));
     console.log('🔍 Individual field checks:', {
       hasHabitId: !!req.body.habitId,
-      hasHabit: !!req.body.habit,
       hasDate: !!req.body.date,
       hasValue: req.body.value !== undefined && req.body.value !== null,
       valueType: typeof req.body.value,
@@ -142,9 +141,9 @@ router.post('/', [
     if (!errors.isEmpty()) {
       console.log('❌ Validation errors:', errors.array());
       
-      // Check if we're missing habitId specifically
+      // Check if we're missing required fields
       const missingFields = [];
-      if (!req.body.habitId && !req.body.habit) missingFields.push('habit');
+      if (!req.body.habitId) missingFields.push('habitId');
       if (!req.body.date) missingFields.push('date');
       if (req.body.value === undefined || req.body.value === null || req.body.value === '') missingFields.push('value');
       
@@ -214,18 +213,18 @@ router.post('/', [
       date: date
     });
 
-    // Also check for any progress with null habit field for the same user and date
+    // Also check for any progress with null habitId field for the same user and date
     // This handles the case where there might be corrupted data
     let corruptedProgress = null;
     if (!progress) {
       corruptedProgress = await Progress.findOne({
         user: req.userId,
-        habit: null,
+        habitId: null,
         date: date
       });
       
       if (corruptedProgress) {
-        console.log('⚠️ Found corrupted progress with null habit, will update it:', corruptedProgress._id);
+        console.log('⚠️ Found corrupted progress with null habitId, will update it:', corruptedProgress._id);
         progress = corruptedProgress;
       }
     }
