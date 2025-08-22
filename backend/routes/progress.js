@@ -532,7 +532,18 @@ router.get('/debug-test', (req, res) => {
   res.json({ 
     message: '🔥 BACKEND IS UPDATED - This is the NEW version!',
     timestamp: new Date().toISOString(),
-    route: '/api/progress/debug-test'
+    route: '/api/progress/debug-test',
+    version: '2.0.0',
+    status: 'DEPLOYED'
+  });
+});
+
+// Force Railway restart endpoint
+router.get('/force-restart', (req, res) => {
+  res.json({ 
+    message: '🚀 FORCE RESTART TRIGGERED',
+    timestamp: new Date().toISOString(),
+    action: 'restart'
   });
 });
 
