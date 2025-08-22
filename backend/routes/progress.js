@@ -132,26 +132,42 @@ router.post('/', [
     }
 
     const { habitId, date, value, notes } = req.body;
+    console.log('🔍 Creating progress with data:', { habitId, date, value, notes });
     
     // Validate that date is not in the future
-    const today = new Date().toISOString().split('T')[0];
-    if (date > today) {
+    // Use a more lenient approach to handle timezone differences
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    console.log('📅 Date validation - Input date:', date, 'Today:', todayStr, 'Is future:', date > todayStr);
+    console.log('📅 Date validation details - Input type:', typeof date, 'Input value:', date);
+    console.log('📅 Date validation details - Today type:', typeof todayStr, 'Today value:', todayStr);
+    
+    // Allow same day and past dates, but not future dates
+    // Add some tolerance for timezone differences (allow same day)
+    if (date > todayStr) {
+      console.log('❌ Future date rejected:', date, '>', todayStr);
       return res.status(400).json({
-        message: 'Cannot create progress for future dates'
+        message: `Cannot create progress for future date: ${date}. Today is ${todayStr}. Please select today or a past date.`
       });
     }
     
+    console.log('✅ Date validation passed:', date, '<=', todayStr);
+    
     // Check if habit exists and belongs to user
+    console.log('🔍 Looking for habit with ID:', habitId, 'for user:', req.userId);
     const habit = await Habit.findOne({ 
       _id: habitId, 
       user: req.userId 
     });
     
     if (!habit) {
+      console.log('❌ Habit not found for user');
       return res.status(404).json({ 
         message: 'Habit not found' 
       });
     }
+    
+    console.log('✅ Habit found:', habit.name, 'Target:', habit.targetValue);
     
     // Check if progress already exists for this habit and date
     let progress = await Progress.findOne({
@@ -159,15 +175,35 @@ router.post('/', [
       habitId: habitId,
       date: date
     });
+
+    // Also check for any progress with null habit field for the same user and date
+    // This handles the case where there might be corrupted data
+    let corruptedProgress = null;
+    if (!progress) {
+      corruptedProgress = await Progress.findOne({
+        user: req.userId,
+        habit: null,
+        date: date
+      });
+      
+      if (corruptedProgress) {
+        console.log('⚠️ Found corrupted progress with null habit, will update it:', corruptedProgress._id);
+        progress = corruptedProgress;
+      }
+    }
     
     if (progress) {
       // Update existing progress
+      progress.habitId = habitId; // Ensure habitId is set correctly
+      progress.habit = habitId; // Also update the habit field for consistency
       progress.value = Number(value);
       progress.notes = notes || '';
       progress.completed = Number(value) >= habit.targetValue;
       progress.completedAt = Number(value) >= habit.targetValue ? new Date() : null;
       
+      console.log('🔄 Updating existing progress:', progress);
       await progress.save();
+      console.log('✅ Progress updated successfully');
       
       res.json({
         message: 'Progress updated successfully',
@@ -185,8 +221,11 @@ router.post('/', [
         completedAt: Number(value) >= habit.targetValue ? new Date() : null
       };
       
+      console.log('🔍 Creating progress with data:', progressData);
       progress = new Progress(progressData);
+      console.log('🔍 Progress model created, attempting to save...');
       await progress.save();
+      console.log('✅ Progress saved successfully');
       
       res.status(201).json({
         message: 'Progress created successfully',
@@ -195,12 +234,55 @@ router.post('/', [
     }
   } catch (error) {
     console.error('Create/update progress error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
+      console.error('Validation errors:', validationErrors);
       return res.status(400).json({ 
         message: 'Validation failed', 
         errors: validationErrors 
+      });
+    }
+    
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      console.error('❌ Duplicate key error detected:', error.keyValue);
+      
+      // Try to find and update existing progress
+      try {
+        const existingProgress = await Progress.findOne({
+          user: req.userId,
+          date: date
+        });
+        
+        if (existingProgress) {
+          console.log('🔄 Found existing progress, updating instead:', existingProgress._id);
+          
+          // Update existing progress
+          existingProgress.habitId = habitId;
+          existingProgress.value = Number(value);
+          existingProgress.notes = notes || '';
+          existingProgress.completed = Number(value) >= habit.targetValue;
+          existingProgress.completedAt = Number(value) >= habit.targetValue ? new Date() : null;
+          
+          await existingProgress.save();
+          
+          res.json({
+            message: 'Progress updated successfully (resolved duplicate key)',
+            progress: await existingProgress.populate('habitId', 'name category color targetValue unit')
+          });
+          return;
+        }
+      } catch (updateError) {
+        console.error('❌ Failed to update existing progress:', updateError);
+      }
+      
+      return res.status(409).json({ 
+        message: 'Progress already exists for this habit and date. Please update instead of creating new.',
+        error: 'DUPLICATE_PROGRESS'
       });
     }
     
@@ -428,6 +510,52 @@ router.get('/stats/overview', async (req, res) => {
     console.error('Get progress stats error:', error);
     res.status(500).json({ 
       message: 'Failed to fetch progress statistics' 
+    });
+  }
+});
+
+// Cleanup corrupted progress data
+router.post('/cleanup', async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    // Find and remove any progress entries with null habit fields
+    const corruptedProgress = await Progress.find({
+      user: userId,
+      $or: [
+        { habitId: null },
+        { habitId: { $exists: false } }
+      ]
+    });
+    
+    if (corruptedProgress.length > 0) {
+      console.log(`🧹 Found ${corruptedProgress.length} corrupted progress entries for user ${userId}`);
+      
+      // Remove corrupted entries
+      await Progress.deleteMany({
+        user: userId,
+        $or: [
+          { habitId: null },
+          { habitId: { $exists: false } }
+        ]
+      });
+      
+      console.log(`✅ Cleaned up ${corruptedProgress.length} corrupted progress entries`);
+      
+      res.json({
+        message: `Cleaned up ${corruptedProgress.length} corrupted progress entries`,
+        cleanedCount: corruptedProgress.length
+      });
+    } else {
+      res.json({
+        message: 'No corrupted progress entries found',
+        cleanedCount: 0
+      });
+    }
+  } catch (error) {
+    console.error('Cleanup progress error:', error);
+    res.status(500).json({ 
+      message: 'Failed to cleanup progress data' 
     });
   }
 });

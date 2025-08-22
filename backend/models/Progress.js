@@ -48,8 +48,11 @@ progressSchema.index({ user: 1, completed: 1 });
 
 // Pre-save middleware to validate date is not in the future
 progressSchema.pre('save', function(next) {
-  const today = new Date().toISOString().split('T')[0];
-  if (this.date > today) {
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  console.log('🔍 Progress model pre-save validation - Date:', this.date, 'Today:', todayStr, 'Is future:', this.date > todayStr);
+  
+  if (this.date > todayStr) {
     const error = new Error('Cannot create progress for future dates');
     error.name = 'ValidationError';
     return next(error);

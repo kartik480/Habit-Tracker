@@ -131,8 +131,10 @@ router.post('/', [
     }
 
     const habitData = { ...req.body, user: req.userId };
+    console.log('🔍 Creating habit with data:', habitData);
     const habit = new Habit(habitData);
     await habit.save();
+    console.log('✅ Habit created successfully:', habit);
 
     res.status(201).json({
       message: 'Habit created successfully',
