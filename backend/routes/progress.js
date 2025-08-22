@@ -98,7 +98,7 @@ router.get('/habit/:habitId', async (req, res) => {
 });
 
 // Create or update progress
-router.post('/', [
+router.post('/create-new', [
   body('habitId')
     .notEmpty()
     .withMessage('Habit ID is required')
