@@ -336,16 +336,9 @@ npm test
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
 
-This project is licensed under the MIT License.
 
-## 🆘 Support
 
-For support and questions:
-- Email: nisakshtechnologiespvtltd@gmail.com
-- Create an issue in the repository
-- Check the documentation
 
 ## 🎉 Acknowledgments
 
