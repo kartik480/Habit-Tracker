@@ -122,7 +122,16 @@ router.post('/', [
     .trim()
     .isLength({ max: 500 })
     .withMessage('Notes cannot exceed 500 characters')
-], async (req, res) => {
+], (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+  next();
+}, async (req, res) => {
   try {
     // Debug: Log the entire request body
     console.log('🔍 Request body received:', req.body);
@@ -136,15 +145,7 @@ router.post('/', [
         valueValue: req.body.value
       });
     
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      console.log('❌ Validation errors:', errors.array());
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
+
 
     const { habitId, date, value, notes } = req.body;
     console.log('🔍 Creating progress with data:', { habitId, date, value, notes });
@@ -323,16 +324,17 @@ router.put('/:id', [
     .trim()
     .isLength({ max: 500 })
     .withMessage('Notes cannot exceed 500 characters')
-], async (req, res) => {
+], (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      message: 'Validation failed',
+      errors: errors.array()
+    });
+  }
+  next();
+}, async (req, res) => {
   try {
-    // Check validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
 
     const { habitId, date, value, notes } = req.body;
     
