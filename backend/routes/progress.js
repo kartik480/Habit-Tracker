@@ -669,7 +669,7 @@ router.get('/force-restart', (req, res) => {
   });
 });
 
-// Database cleanup route to fix corrupted progress records
+// Database cleanup route to fix corrupted progress records (temporarily public for emergency fix)
 router.post('/cleanup-database', async (req, res) => {
   try {
     console.log('🧹 Starting database cleanup...');
