@@ -746,10 +746,28 @@ router.post('/cleanup-database', async (req, res) => {
     
     console.log(`🧹 Deleted ${deleteResult.deletedCount} corrupted records`);
     
+    // Drop the old index and recreate it with correct field names
+    try {
+      console.log('🔧 Fixing database index...');
+      const collection = Progress.collection;
+      
+      // Drop the old index that expects 'habit' field
+      await collection.dropIndex('user_1_habit_1_date_1');
+      console.log('✅ Dropped old index: user_1_habit_1_date_1');
+      
+      // Create new index with correct field names
+      await collection.createIndex({ user: 1, habitId: 1, date: 1 }, { unique: true });
+      console.log('✅ Created new index: user_1_habitId_1_date_1');
+      
+    } catch (indexError) {
+      console.log('⚠️ Index fix warning:', indexError.message);
+    }
+    
     res.json({ 
       message: 'Database cleanup completed successfully',
       cleanedCount: deleteResult.deletedCount,
-      details: 'Removed progress records with null habitId or old habit field'
+      details: 'Removed corrupted records and fixed database index',
+      indexFixed: true
     });
     
   } catch (error) {
