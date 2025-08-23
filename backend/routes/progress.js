@@ -6,7 +6,37 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
+// Database migration route to fix indexes and clean corrupted records (temporarily public for emergency fix)
+router.post('/migrate-database', async (req, res) => {
+  try {
+    console.log('🚀 Starting database migration...');
+    
+    // Call the migration function from the Progress model
+    const success = await Progress.migrateDatabase();
+    
+    if (success) {
+      res.json({ 
+        message: 'Database migration completed successfully!',
+        details: 'Fixed indexes and cleaned corrupted records',
+        status: 'SUCCESS'
+      });
+    } else {
+      res.status(500).json({ 
+        message: 'Database migration failed',
+        status: 'FAILED'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Database migration error:', error);
+    res.status(500).json({ 
+      message: 'Failed to migrate database',
+      error: error.message
+    });
+  }
+});
+
+// Apply authentication middleware to all other routes
 router.use(authenticateToken);
 
 // Get all progress for the authenticated user
@@ -712,36 +742,6 @@ router.get('/force-restart', (req, res) => {
     timestamp: new Date().toISOString(),
     action: 'restart'
   });
-});
-
-// Database migration route to fix indexes and clean corrupted records (temporarily public for emergency fix)
-router.post('/migrate-database', async (req, res) => {
-  try {
-    console.log('🚀 Starting database migration...');
-    
-    // Call the migration function from the Progress model
-    const success = await Progress.migrateDatabase();
-    
-    if (success) {
-      res.json({ 
-        message: 'Database migration completed successfully!',
-        details: 'Fixed indexes and cleaned corrupted records',
-        status: 'SUCCESS'
-      });
-    } else {
-      res.status(500).json({ 
-        message: 'Database migration failed',
-        status: 'FAILED'
-      });
-    }
-    
-  } catch (error) {
-    console.error('Database migration error:', error);
-    res.status(500).json({ 
-      message: 'Failed to migrate database',
-      error: error.message
-    });
-  }
 });
 
 // Database cleanup route to fix corrupted progress records (temporarily public for emergency fix)
