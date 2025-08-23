@@ -213,6 +213,51 @@ router.post('/', [
       });
     }
     
+    // Handle duplicate key error specifically (database schema conflict)
+    if (error.code === 11000) {
+      console.error('❌ Duplicate key error detected:', error.keyValue);
+      
+      try {
+        // Clean up corrupted records automatically
+        console.log('🧹 Auto-cleaning corrupted database records...');
+        const deleteResult = await Progress.deleteMany({
+          $or: [
+            { habitId: null },
+            { habit: { $exists: true } }
+          ]
+        });
+        console.log(`🧹 Deleted ${deleteResult.deletedCount} corrupted records`);
+        
+        // Now try to create the progress again
+        const progressData = {
+          user: req.userId,
+          habitId: habitId,
+          date: date,
+          value: Number(value),
+          notes: notes || '',
+          completed: Number(value) >= habit.targetValue,
+          completedAt: Number(value) >= habit.targetValue ? new Date() : null
+        };
+        
+        const newProgress = new Progress(progressData);
+        await newProgress.save();
+        
+        console.log('✅ Progress created successfully after cleanup');
+        res.status(201).json({
+          message: 'Progress created successfully (database cleaned automatically)',
+          progress: await newProgress.populate('habitId', 'name category color targetValue unit')
+        });
+        return;
+        
+      } catch (cleanupError) {
+        console.error('❌ Failed to cleanup and retry:', cleanupError);
+        return res.status(500).json({ 
+          message: 'Database cleanup failed. Please try again.',
+          error: 'CLEANUP_FAILED'
+        });
+      }
+    }
+    
     res.status(500).json({ 
       message: 'Failed to save progress' 
     });
