@@ -46,6 +46,51 @@ progressSchema.index({ user: 1, date: -1 });
 progressSchema.index({ user: 1, habitId: 1 });
 progressSchema.index({ user: 1, completed: 1 });
 
+// Database migration function to fix old indexes
+progressSchema.statics.migrateDatabase = async function() {
+  try {
+    console.log('🔧 Starting database migration...');
+    const collection = this.collection;
+    
+    // Get all indexes
+    const indexes = await collection.indexes();
+    console.log('📊 Current indexes:', indexes.map(idx => idx.name));
+    
+    // Check if old index exists
+    const oldIndex = indexes.find(idx => idx.name === 'user_1_habit_1_date_1');
+    if (oldIndex) {
+      console.log('❌ Found old index, dropping it...');
+      await collection.dropIndex('user_1_habit_1_date_1');
+      console.log('✅ Old index dropped');
+    }
+    
+    // Check if new index exists
+    const newIndex = indexes.find(idx => idx.name === 'user_1_habitId_1_date_1');
+    if (!newIndex) {
+      console.log('🔧 Creating new index...');
+      await collection.createIndex({ user: 1, habitId: 1, date: 1 }, { unique: true });
+      console.log('✅ New index created');
+    }
+    
+    // Clean up corrupted records
+    console.log('🧹 Cleaning up corrupted records...');
+    const deleteResult = await collection.deleteMany({
+      $or: [
+        { habitId: null },
+        { habit: { $exists: true } }
+      ]
+    });
+    console.log(`✅ Deleted ${deleteResult.deletedCount} corrupted records`);
+    
+    console.log('🎉 Database migration completed successfully!');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Database migration failed:', error);
+    return false;
+  }
+};
+
 // Pre-save middleware to validate date is not in the future
 progressSchema.pre('save', function(next) {
   const today = new Date();
