@@ -658,6 +658,53 @@ router.get('/force-restart', (req, res) => {
   });
 });
 
+// Database cleanup route to fix corrupted progress records
+router.post('/cleanup-database', async (req, res) => {
+  try {
+    console.log('🧹 Starting database cleanup...');
+    
+    // Find all progress records with null habitId or old 'habit' field
+    const corruptedProgress = await Progress.find({
+      $or: [
+        { habitId: null },
+        { habit: { $exists: true } }
+      ]
+    });
+    
+    console.log(`🧹 Found ${corruptedProgress.length} corrupted progress records`);
+    
+    if (corruptedProgress.length === 0) {
+      return res.json({ 
+        message: 'Database is clean - no corrupted records found',
+        cleanedCount: 0
+      });
+    }
+    
+    // Delete corrupted records
+    const deleteResult = await Progress.deleteMany({
+      $or: [
+        { habitId: null },
+        { habit: { $exists: true } }
+      ]
+    });
+    
+    console.log(`🧹 Deleted ${deleteResult.deletedCount} corrupted records`);
+    
+    res.json({ 
+      message: 'Database cleanup completed successfully',
+      cleanedCount: deleteResult.deletedCount,
+      details: 'Removed progress records with null habitId or old habit field'
+    });
+    
+  } catch (error) {
+    console.error('Database cleanup error:', error);
+    res.status(500).json({ 
+      message: 'Failed to cleanup database',
+      error: error.message
+    });
+  }
+});
+
 // NEW ROUTE STRUCTURE - FORCE RAILWAY UPDATE
 router.get('/new-structure-test', (req, res) => {
   res.json({ 
