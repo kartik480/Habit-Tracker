@@ -97,6 +97,17 @@ router.get('/habit/:habitId', async (req, res) => {
   }
 });
 
+// Test endpoint to verify route is working
+router.get('/test-route', (req, res) => {
+  res.json({ 
+    message: '✅ MAIN POST ROUTE IS AVAILABLE!',
+    timestamp: new Date().toISOString(),
+    route: '/api/progress',
+    method: 'POST',
+    status: 'READY'
+  });
+});
+
 // Create or update progress - MAIN ROUTE
 router.post('/', [
   body('habitId')
