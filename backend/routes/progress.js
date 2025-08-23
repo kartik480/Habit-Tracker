@@ -97,6 +97,117 @@ router.get('/habit/:habitId', async (req, res) => {
   }
 });
 
+// Create or update progress - MAIN ROUTE
+router.post('/', [
+  body('habitId')
+    .notEmpty()
+    .withMessage('Habit ID is required')
+    .isMongoId()
+    .withMessage('Invalid habit ID'),
+  
+  body('date')
+    .notEmpty()
+    .withMessage('Date is required')
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage('Date must be in YYYY-MM-DD format'),
+  
+  body('value')
+    .notEmpty()
+    .withMessage('Value is required')
+    .isFloat({ min: 0 })
+    .withMessage('Value must be a non-negative number'),
+  
+  body('notes')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Notes cannot exceed 500 characters')
+], async (req, res) => {
+  try {
+    console.log('🚀 MAIN ROUTE: Creating/updating progress');
+    console.log('🔍 Request body:', req.body);
+    
+    const { habitId, date, value, notes } = req.body;
+    
+    // Validate that date is not in the future
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    
+    if (date > todayStr) {
+      return res.status(400).json({
+        message: `Cannot create progress for future date: ${date}. Today is ${todayStr}.`
+      });
+    }
+    
+    // Check if habit exists and belongs to user
+    const habit = await Habit.findOne({ 
+      _id: habitId, 
+      user: req.userId 
+    });
+    
+    if (!habit) {
+      return res.status(404).json({ 
+        message: 'Habit not found' 
+      });
+    }
+    
+    // Check if progress already exists for this habit and date
+    let progress = await Progress.findOne({
+      user: req.userId,
+      habitId: habitId,
+      date: date
+    });
+    
+    if (progress) {
+      // Update existing progress
+      progress.value = Number(value);
+      progress.notes = notes || '';
+      progress.completed = Number(value) >= habit.targetValue;
+      progress.completedAt = Number(value) >= habit.targetValue ? new Date() : null;
+      
+      await progress.save();
+      
+      res.json({
+        message: 'Progress updated successfully',
+        progress: await progress.populate('habitId', 'name category color targetValue unit')
+      });
+    } else {
+      // Create new progress
+      const progressData = {
+        user: req.userId,
+        habitId: habitId,
+        date: date,
+        value: Number(value),
+        notes: notes || '',
+        completed: Number(value) >= habit.targetValue,
+        completedAt: Number(value) >= habit.targetValue ? new Date() : null
+      };
+      
+      progress = new Progress(progressData);
+      await progress.save();
+      
+      res.status(201).json({
+        message: 'Progress created successfully',
+        progress: await progress.populate('habitId', 'name category color targetValue unit')
+      });
+    }
+  } catch (error) {
+    console.error('Create/update progress error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: validationErrors 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Failed to save progress' 
+    });
+  }
+});
+
 // Create or update progress - NEW VERSION
 router.post('/v2', [
   body('habitId')
