@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path');
 require('dotenv').config();
 
 // Import routes
@@ -90,13 +91,24 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Serve static files from React build
+if (process.env.NODE_ENV === 'production') {
+  // Serve static files from the React build
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Handle React routing, return all requests to React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/habits', habitsRoutes);
 app.use('/api/progress', progressRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
   res.status(404).json({ 
     message: 'Route not found' 
   });

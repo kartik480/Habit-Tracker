@@ -1,0 +1,32 @@
+{
+  "name": "habittracker",
+  "description": "A full-stack habit tracking application",
+  "repository": "https://github.com/yourusername/habittracker",
+  "logo": "https://cdn.iconscout.com/icon/free/png-256/free-habit-tracker-1-285348.png",
+  "keywords": ["node", "express", "react", "mongodb", "habit-tracker"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Environment setting",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "Secret key for JWT tokens",
+      "generator": "secret"
+    },
+    "MONGODB_URI": {
+      "description": "MongoDB connection string",
+      "value": "mongodb+srv://yourusername:yourpassword@cluster0.mongodb.net/habit-tracker?retryWrites=true&w=majority"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  }
+}
