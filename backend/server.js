@@ -60,12 +60,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   console.log('🏥 Health check request from:', req.headers.origin || 'Unknown origin');
+  const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
   res.json({ 
     message: 'Habit Tracker API is running!', 
     timestamp: new Date(),
     version: '1.0.0',
     cors: 'enabled',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    database: {
+      status: mongoStatus,
+      readyState: mongoose.connection.readyState,
+      name: mongoose.connection.name || 'Not connected'
+    }
   });
 });
 
@@ -99,6 +106,15 @@ app.use('*', (req, res) => {
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   
+  // Check if it's a MongoDB connection error
+  if (error.name === 'MongoNetworkError' || error.name === 'MongoServerSelectionError') {
+    return res.status(503).json({
+      message: 'Database connection error - please try again later',
+      error: 'Database temporarily unavailable',
+      retryAfter: 5
+    });
+  }
+  
   if (error.name === 'ValidationError') {
     return res.status(400).json({
       message: 'Validation failed',
@@ -125,15 +141,30 @@ app.use((error, req, res, next) => {
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/habit-tracker')
-  .then(() => {
+const connectDB = async () => {
+  try {
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/habit-tracker';
+    console.log('🔌 Attempting to connect to MongoDB...');
+    console.log('🔌 URI:', mongoURI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@')); // Hide credentials
+    
+    await mongoose.connect(mongoURI);
     console.log('✅ MongoDB connected successfully');
     console.log(`📊 Database: ${mongoose.connection.name}`);
-  })
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
-    process.exit(1);
-  });
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.error('💡 To fix this issue:');
+    console.error('   1. Install MongoDB locally: https://docs.mongodb.com/manual/installation/');
+    console.error('   2. Or use MongoDB Atlas (cloud): https://www.mongodb.com/cloud/atlas');
+    console.error('   3. Or set MONGODB_URI environment variable');
+    console.error('🔄 Retrying connection in 5 seconds...');
+    
+    // Retry connection after 5 seconds
+    setTimeout(connectDB, 5000);
+  }
+};
+
+// Start MongoDB connection
+connectDB();
 
 // Handle MongoDB connection events
 mongoose.connection.on('error', (err) => {
@@ -172,6 +203,8 @@ server.listen(PORT, () => {
   console.log(`🗄️  MongoDB: ${process.env.MONGODB_URI ? 'Set ✓' : 'Missing ✗'}`);
   console.log(`🔌 WebSocket server ready for real-time updates`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💡 Note: Server will start even if MongoDB is not available initially`);
+  console.log(`💡 API endpoints will work but database operations will fail until MongoDB connects`);
 });
 
 // Export for testing

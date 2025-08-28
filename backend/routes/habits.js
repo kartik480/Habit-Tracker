@@ -2,11 +2,15 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Habit = require('../models/Habit');
 const { authenticateToken } = require('../middleware/auth');
+const dbCheck = require('../middleware/dbCheck');
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+
+// Apply database check middleware to all routes
+router.use(dbCheck);
 
 // Get all habits for the authenticated user
 router.get('/', async (req, res) => {

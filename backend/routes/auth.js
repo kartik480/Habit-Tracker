@@ -4,11 +4,12 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
+const dbCheck = require('../middleware/dbCheck');
 
 const router = express.Router();
 
 // Register new user
-router.post('/register', [
+router.post('/register', dbCheck, [
   body('username')
     .trim()
     .isLength({ min: 3, max: 30 })
@@ -101,7 +102,7 @@ router.post('/register', [
 });
 
 // Login user
-router.post('/login', [
+router.post('/login', dbCheck, [
   body('identifier')
     .notEmpty()
     .withMessage('Email or username is required'),
@@ -191,7 +192,7 @@ router.post('/login', [
 });
 
 // Get user profile (protected route)
-router.get('/me', authenticateToken, async (req, res) => {
+router.get('/me', authenticateToken, dbCheck, async (req, res) => {
   try {
     res.json({
       user: req.user

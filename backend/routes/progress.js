@@ -3,11 +3,22 @@ const { body, validationResult } = require('express-validator');
 const Progress = require('../models/Progress');
 const Habit = require('../models/Habit');
 const { authenticateToken } = require('../middleware/auth');
+const dbCheck = require('../middleware/dbCheck');
 
 const router = express.Router();
 
+// Simple health check endpoint
+router.get('/health', dbCheck, (req, res) => {
+  res.json({ 
+    message: 'Progress routes are working!',
+    timestamp: new Date().toISOString(),
+    status: 'OK',
+    database: 'Connected'
+  });
+});
+
 // Database migration route to fix indexes and clean corrupted records (temporarily public for emergency fix)
-router.post('/migrate-database', async (req, res) => {
+router.post('/migrate-database', dbCheck, async (req, res) => {
   try {
     console.log('🚀 Starting database migration...');
     
@@ -38,6 +49,9 @@ router.post('/migrate-database', async (req, res) => {
 
 // Apply authentication middleware to all other routes
 router.use(authenticateToken);
+
+// Apply database check middleware to all routes
+router.use(dbCheck);
 
 // Get all progress for the authenticated user
 router.get('/', async (req, res) => {
@@ -167,6 +181,8 @@ router.post('/', [
   try {
     console.log('🚀 MAIN ROUTE: Creating/updating progress');
     console.log('🔍 Request body:', req.body);
+    console.log('🔍 User ID from token:', req.userId);
+    console.log('🔍 Request headers:', req.headers);
     
     const { habitId, date, value, notes } = req.body;
     
@@ -181,16 +197,20 @@ router.post('/', [
     }
     
     // Check if habit exists and belongs to user
+    console.log('🔍 Looking for habit with ID:', habitId, 'for user:', req.userId);
     const habit = await Habit.findOne({ 
       _id: habitId, 
       user: req.userId 
     });
     
     if (!habit) {
+      console.log('❌ Habit not found for user');
       return res.status(404).json({ 
         message: 'Habit not found' 
       });
     }
+    
+    console.log('✅ Habit found:', habit.name, 'Target:', habit.targetValue);
     
     // Check if progress already exists for this habit and date
     let progress = await Progress.findOne({
@@ -206,7 +226,9 @@ router.post('/', [
       progress.completed = Number(value) >= habit.targetValue;
       progress.completedAt = Number(value) >= habit.targetValue ? new Date() : null;
       
+      console.log('🔄 Updating existing progress:', progress);
       await progress.save();
+      console.log('✅ Progress updated successfully');
       
       res.json({
         message: 'Progress updated successfully',
@@ -224,8 +246,11 @@ router.post('/', [
         completedAt: Number(value) >= habit.targetValue ? new Date() : null
       };
       
+      console.log('🔍 Creating progress with data:', progressData);
       progress = new Progress(progressData);
+      console.log('🔍 Progress model created, attempting to save...');
       await progress.save();
+      console.log('✅ Progress saved successfully');
       
       res.status(201).json({
         message: 'Progress created successfully',
@@ -233,10 +258,14 @@ router.post('/', [
       });
     }
   } catch (error) {
-    console.error('Create/update progress error:', error);
+    console.error('❌ Create/update progress error:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:', error.stack);
     
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
+      console.error('❌ Validation errors:', validationErrors);
       return res.status(400).json({ 
         message: 'Validation failed', 
         errors: validationErrors 
@@ -289,7 +318,9 @@ router.post('/', [
     }
     
     res.status(500).json({ 
-      message: 'Failed to save progress' 
+      message: 'Failed to save progress',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
